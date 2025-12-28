@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from PIL import Image
 import io
 
-# Page configuration
 st.set_page_config(
     page_title="🌱 RootVision Analytics",
     page_icon="🌱",
@@ -15,7 +14,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
 st.markdown("""
 <style>
     [data-testid="stMetricValue"] {
@@ -40,18 +38,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar navigation - ROOT ANALYSIS FIRST
 st.sidebar.title("🌱 RootVision Analytics")
 st.sidebar.markdown("---")
 page = st.sidebar.radio("Navigation", [
     "🔬 Root Analysis",
     "📊 Dashboard",
-    "📈 Growth Tracking",
     "📋 Trial Management",
     "⚙️ Settings"
 ])
 
-# Generate sample data
 @st.cache_data
 def generate_trial_data():
     dates = pd.date_range(start='2025-01-01', periods=30, freq='D')
@@ -75,9 +70,6 @@ def generate_trial_data():
 
 trial_data = generate_trial_data()
 
-# ============================================================================
-# ROOT ANALYSIS PAGE - NOW PRIMARY (FIRST)
-# ============================================================================
 if page == "🔬 Root Analysis":
     st.markdown("""
     <div class="header-section">
@@ -93,7 +85,6 @@ if page == "🔬 Root Analysis":
     </div>
     """, unsafe_allow_html=True)
     
-    # Tabs for different analysis modes
     tabs = st.tabs(["Single Image Analysis", "Batch Processing", "Model Settings", "Analysis History"])
     
     with tabs[0]:
@@ -110,7 +101,6 @@ if page == "🔬 Root Analysis":
             )
             
             if uploaded_file is not None:
-                # Display uploaded image
                 image = Image.open(uploaded_file)
                 st.image(image, caption="Uploaded Root Image", use_container_width=True)
                 st.success("✅ Image loaded successfully!")
@@ -132,14 +122,12 @@ if page == "🔬 Root Analysis":
             if st.button("🚀 Analyze Root Image", use_container_width=True, type="primary"):
                 st.info("⏳ Processing image with computer vision model...")
                 
-                # Simulate CV processing
                 progress = st.progress(0)
                 for i in range(100):
                     progress.progress(i + 1)
                 
                 st.success("✅ Analysis Complete!")
                 
-                # Display results
                 st.subheader("📊 Analysis Results")
                 
                 col1, col2, col3, col4 = st.columns(4)
@@ -148,63 +136,171 @@ if page == "🔬 Root Analysis":
                     st.metric("Total Roots Detected", "47", "+3 from previous")
                 
                 with col2:
-                    st.metric("Total Length", "156.8 cm", "+8.2 cm")
+                    st.metric("Total Length", "1,847.3 cm", "+82.2 cm")
                 
                 with col3:
-                    st.metric("Surface Area", "487.3 cm²", "+25.1 cm²")
+                    st.metric("Surface Area", "4,287.3 cm²", "+251.1 cm²")
                 
                 with col4:
-                    st.metric("Root Density", "8.4/cm³", "+0.3/cm³")
+                    st.metric("Root Density", "28.4/cm³", "+1.8/cm³")
                 
                 st.markdown("---")
                 
-                # Detailed metrics table
-                st.subheader("🔍 Detailed Root Metrics")
+                st.subheader("🌿 Root System Summary")
+                
+                col1, col2, col3, col4, col5, col6 = st.columns(6)
+                
+                with col1:
+                    st.metric("Primary Roots", "8", "Main axes")
+                
+                with col2:
+                    st.metric("Secondary Roots", "24", "Lateral branches")
+                
+                with col3:
+                    st.metric("Tertiary Roots", "156", "Fine roots")
+                
+                with col4:
+                    st.metric("Root Depth", "42.3 cm", "Penetration")
+                
+                with col5:
+                    st.metric("Avg Diameter", "2.1 mm", "All roots")
+                
+                with col6:
+                    st.metric("Branching Index", "6.2", "Complexity")
+                
+                st.markdown("---")
+                
+                st.subheader("🔍 Primary Root Details")
                 
                 results_data = {
-                    'Root ID': ['R001', 'R002', 'R003', 'R004', 'R005'],
-                    'Length (cm)': [12.5, 11.2, 13.8, 10.9, 12.3],
-                    'Diameter (mm)': [2.1, 1.8, 2.4, 1.9, 2.2],
-                    'Surface Area (cm²)': [85.2, 78.5, 92.3, 72.1, 81.9],
-                    'Angle (degrees)': [45.2, 32.1, 58.4, 41.7, 39.8],
-                    'Confidence': [0.98, 0.96, 0.99, 0.94, 0.97]
+                    'Root ID': ['P001', 'P002', 'P003', 'P004', 'P005', 'P006', 'P007', 'P008'],
+                    'Type': ['Primary', 'Primary', 'Primary', 'Primary', 'Primary', 'Primary', 'Primary', 'Primary'],
+                    'Length (cm)': [42.3, 38.9, 41.2, 35.7, 39.8, 37.5, 40.1, 36.2],
+                    'Diameter (mm)': [3.2, 2.9, 3.1, 2.8, 3.0, 2.7, 3.2, 2.9],
+                    'Surface Area (cm²)': [428.5, 356.2, 398.7, 314.5, 376.8, 320.1, 412.3, 332.7],
+                    'Volume (cm³)': [85.7, 62.3, 76.2, 52.1, 68.9, 48.3, 82.4, 56.8],
+                    'Angle (degrees)': [45.2, 32.1, 58.4, 41.7, 39.8, 48.2, 35.9, 43.1],
+                    'Secondary Branches': [3, 3, 3, 2, 3, 2, 3, 3],
+                    'Confidence': [0.98, 0.96, 0.99, 0.94, 0.97, 0.95, 0.99, 0.96]
                 }
                 
                 results_df = pd.DataFrame(results_data)
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
                 
-                # Visualization of detected roots
+                st.markdown("---")
+                
+                st.subheader("🌾 Secondary Root Details")
+                
+                secondary_data = {
+                    'Root ID': ['S001', 'S002', 'S003', 'S004', 'S005', 'S006'],
+                    'Parent Root': ['P001', 'P001', 'P002', 'P002', 'P003', 'P003'],
+                    'Length (cm)': [18.5, 16.2, 17.8, 15.3, 19.2, 17.1],
+                    'Diameter (mm)': [1.8, 1.6, 1.9, 1.5, 2.0, 1.7],
+                    'Insertion Angle (°)': [65.3, 72.1, 58.9, 68.4, 71.2, 64.8],
+                    'Distance from Base (cm)': [8.2, 12.5, 7.8, 15.3, 9.1, 13.7],
+                    'Surface Area (cm²)': [104.8, 81.3, 106.5, 72.1, 121.3, 91.8]
+                }
+                
+                secondary_df = pd.DataFrame(secondary_data)
+                st.dataframe(secondary_df, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                
                 st.subheader("📈 Root Distribution Analysis")
                 
-                col1, col2 = st.columns(2)
+                col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    # Root length distribution
                     fig_length = px.histogram(
                         results_df,
                         x='Length (cm)',
-                        nbins=15,
-                        title='Root Length Distribution',
+                        nbins=8,
+                        title='Primary Root Length Distribution',
                         labels={'Length (cm)': 'Length (cm)', 'count': 'Frequency'},
                         color_discrete_sequence=['#208090']
                     )
                     st.plotly_chart(fig_length, use_container_width=True)
                 
                 with col2:
-                    # Root angle distribution
-                    fig_angle = px.scatter(
+                    fig_diameter = px.histogram(
+                        results_df,
+                        x='Diameter (mm)',
+                        nbins=8,
+                        title='Primary Root Diameter Distribution',
+                        labels={'Diameter (mm)': 'Diameter (mm)', 'count': 'Frequency'},
+                        color_discrete_sequence=['#059669']
+                    )
+                    st.plotly_chart(fig_diameter, use_container_width=True)
+                
+                with col3:
+                    fig_angle = px.histogram(
                         results_df,
                         x='Angle (degrees)',
-                        y='Length (cm)',
-                        size='Diameter (mm)',
-                        color='Confidence',
-                        title='Root Angle vs Length',
-                        color_continuous_scale=['#ef4444', '#f59e0b', '#10b981']
+                        nbins=8,
+                        title='Root Emergence Angle Distribution',
+                        labels={'Angle (degrees)': 'Angle (°)', 'count': 'Frequency'},
+                        color_discrete_sequence=['#f59e0b']
                     )
                     st.plotly_chart(fig_angle, use_container_width=True)
                 
-                # Download results
                 st.markdown("---")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig_ld = px.scatter(
+                        results_df,
+                        x='Length (cm)',
+                        y='Diameter (mm)',
+                        size='Surface Area (cm²)',
+                        color='Secondary Branches',
+                        title='Root Length vs Diameter (colored by branching)',
+                        color_continuous_scale=['#ef4444', '#f59e0b', '#10b981']
+                    )
+                    st.plotly_chart(fig_ld, use_container_width=True)
+                
+                with col2:
+                    fig_ab = px.scatter(
+                        results_df,
+                        x='Angle (degrees)',
+                        y='Secondary Branches',
+                        size='Length (cm)',
+                        color='Confidence',
+                        title='Emergence Angle vs Secondary Branching',
+                        color_continuous_scale=['#ef4444', '#f59e0b', '#10b981']
+                    )
+                    st.plotly_chart(fig_ab, use_container_width=True)
+                
+                st.markdown("---")
+                
+                st.subheader("🏗️ Root Architecture Summary")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("""
+                    **Total Root System Metrics:**
+                    - **Total Root Length:** 1,847.3 cm
+                    - **Total Surface Area:** 4,287.3 cm²
+                    - **Total Root Volume:** 612.8 cm³
+                    - **Maximum Depth:** 42.3 cm
+                    - **Average Diameter:** 2.1 mm
+                    - **Root Density Index:** 28.4 roots/cm³
+                    """)
+                
+                with col2:
+                    st.markdown("""
+                    **Branching Architecture:**
+                    - **Primary Roots:** 8 main axes
+                    - **Secondary Roots:** 24 lateral branches
+                    - **Tertiary Roots:** 156 fine roots
+                    - **Branching Complexity Index:** 6.2
+                    - **Avg Branching Angle:** 52.8°
+                    - **Root System Spread:** 38.7 cm (horizontal)
+                    """)
+                
+                st.markdown("---")
+                
                 st.subheader("💾 Export Results")
                 
                 col1, col2, col3 = st.columns(3)
@@ -212,17 +308,23 @@ if page == "🔬 Root Analysis":
                 with col1:
                     csv = results_df.to_csv(index=False)
                     st.download_button(
-                        label="📥 Download CSV",
+                        label="📥 Download Primary Roots CSV",
                         data=csv,
-                        file_name=f"root_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        file_name=f"primary_roots_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv"
                     )
                 
                 with col2:
-                    st.button("📧 Email Results")
+                    csv_sec = secondary_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Secondary Roots CSV",
+                        data=csv_sec,
+                        file_name=f"secondary_roots_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
                 
                 with col3:
-                    st.button("☁️ Save to Cloud")
+                    st.button("📧 Email Complete Report")
     
     with tabs[1]:
         st.subheader("📂 Batch Image Processing")
@@ -256,11 +358,12 @@ if page == "🔬 Root Analysis":
                 
                 st.success(f"✅ Processed {len(batch_files)} images successfully!")
                 
-                # Show batch results summary
                 batch_summary = {
                     'Image': [f.name for f in batch_files[:5]],
-                    'Roots Detected': [np.random.randint(30, 60) for _ in range(min(5, len(batch_files)))],
-                    'Total Length (cm)': [np.random.uniform(120, 180) for _ in range(min(5, len(batch_files)))],
+                    'Total Roots': [np.random.randint(30, 60) for _ in range(min(5, len(batch_files)))],
+                    'Total Length (cm)': [np.random.uniform(1200, 2000) for _ in range(min(5, len(batch_files)))],
+                    'Avg Diameter (mm)': [np.random.uniform(1.8, 2.5) for _ in range(min(5, len(batch_files)))],
+                    'Max Depth (cm)': [np.random.uniform(35, 45) for _ in range(min(5, len(batch_files)))],
                     'Avg Confidence': [np.random.uniform(0.92, 0.99) for _ in range(min(5, len(batch_files)))]
                 }
                 
@@ -302,8 +405,9 @@ if page == "🔬 Root Analysis":
         history_data = {
             'Date': pd.date_range('2025-01-20', periods=8),
             'Image': [f"root_sample_{i}.jpg" for i in range(8)],
-            'Roots Detected': np.random.randint(30, 60, 8),
-            'Total Length (cm)': np.random.uniform(120, 180, 8),
+            'Total Roots': np.random.randint(30, 60, 8),
+            'Total Length (cm)': np.random.uniform(1200, 2000, 8),
+            'Max Depth (cm)': np.random.uniform(35, 45, 8),
             'Processing Time (s)': np.random.uniform(2, 8, 8),
             'Model Used': ['YOLOv8'] * 8
         }
@@ -318,16 +422,13 @@ if page == "🔬 Root Analysis":
         fig = px.line(
             history_df,
             x='Date',
-            y='Roots Detected',
+            y='Total Roots',
             title='Root Detection Trend Over Time',
             markers=True
         )
         fig.update_layout(height=400, template='plotly_white')
         st.plotly_chart(fig, use_container_width=True)
 
-# ============================================================================
-# DASHBOARD PAGE
-# ============================================================================
 elif page == "📊 Dashboard":
     st.markdown("""
     <div class="header-section">
@@ -336,7 +437,6 @@ elif page == "📊 Dashboard":
     </div>
     """, unsafe_allow_html=True)
     
-    # KPI Metrics
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -356,7 +456,6 @@ elif page == "📊 Dashboard":
     
     st.markdown("---")
     
-    # Charts
     col1, col2 = st.columns(2)
     
     with col1:
@@ -395,62 +494,6 @@ elif page == "📊 Dashboard":
         fig_health.update_layout(height=400, template='plotly_white', showlegend=False)
         st.plotly_chart(fig_health, use_container_width=True)
 
-# ============================================================================
-# GROWTH TRACKING PAGE
-# ============================================================================
-elif page == "📈 Growth Tracking":
-    st.title("📈 Plant Growth Tracking")
-    st.markdown("---")
-    
-    selected_trial = st.selectbox("Select Trial:", trial_data['Trial'].unique())
-    trial_subset = trial_data[trial_data['Trial'] == selected_trial]
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        final_depth = trial_subset['Root Depth (cm)'].iloc[-1]
-        initial_depth = trial_subset['Root Depth (cm)'].iloc[0]
-        growth = final_depth - initial_depth
-        st.metric("Root Depth", f"{final_depth:.1f} cm", f"+{growth:.1f} cm growth")
-    
-    with col2:
-        avg_health = trial_subset['Health Score'].mean()
-        st.metric("Average Health", f"{avg_health:.1f}/10", "Excellent")
-    
-    with col3:
-        total_days = (trial_subset['Date'].max() - trial_subset['Date'].min()).days
-        st.metric("Days Tracked", total_days, "Complete data")
-    
-    st.markdown("---")
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=trial_subset['Date'],
-        y=trial_subset['Root Depth (cm)'],
-        name='Root Depth (cm)',
-        mode='lines+markers',
-        line=dict(color='#208090', width=3)
-    ))
-    
-    fig.update_layout(
-        title=f"Growth Metrics - {selected_trial}",
-        xaxis_title="Date",
-        yaxis_title="Root Depth (cm)",
-        hovermode='x unified',
-        template='plotly_white',
-        height=500
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.subheader("Detailed Measurements")
-    display_data = trial_subset[['Date', 'Root Depth (cm)', 'Health Score']].copy()
-    display_data['Date'] = display_data['Date'].dt.strftime('%Y-%m-%d')
-    st.dataframe(display_data, use_container_width=True, hide_index=True)
-
-# ============================================================================
-# TRIAL MANAGEMENT PAGE
-# ============================================================================
 elif page == "📋 Trial Management":
     st.title("📋 Trial Management")
     st.markdown("---")
@@ -484,9 +527,6 @@ elif page == "📋 Trial Management":
         st.subheader("Trial History")
         st.info("No completed trials yet")
 
-# ============================================================================
-# SETTINGS PAGE
-# ============================================================================
 elif page == "⚙️ Settings":
     st.title("⚙️ Settings")
     st.markdown("---")
@@ -505,10 +545,10 @@ elif page == "⚙️ Settings":
     
     st.markdown("---")
     st.subheader("About RootVision Analytics")
-    st.markdown("**v0.3.0** | AI-Powered Root Phenotyping with Computer Vision | Built with Streamlit & Python")
+    st.markdown("**v0.4.0** | AI-Powered Root Phenotyping with Advanced Morphology Analysis | Built with Streamlit & Python")
     
     if st.button("💾 Save Settings", use_container_width=True):
         st.success("✅ Settings saved!")
 
 st.markdown("---")
-st.markdown("<div style='text-align: center; color: #666; font-size: 0.85rem;'>🌱 RootVision Analytics | AgriVision Analytics | v0.3.0 - CV Focused</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #666; font-size: 0.85rem;'>🌱 RootVision Analytics | AgriVision Analytics | v0.4.0</div>", unsafe_allow_html=True)
