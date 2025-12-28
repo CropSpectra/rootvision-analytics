@@ -35,20 +35,60 @@ st.markdown("""
         color: white;
         margin-bottom: 20px;
     }
+    .user-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 12px;
+        border-radius: 8px;
+        color: white;
+        font-size: 0.9rem;
+        margin-bottom: 15px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
+# Initialize session state for user
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = None
+
 st.sidebar.title("🌱 RootVision Analytics")
 st.sidebar.markdown("---")
-page = st.sidebar.radio("Navigation", [
-    "🔬 Root Analysis",
-    "📊 Dashboard",
-    "📋 Trial Management",
-    "⚙️ Settings"
-])
 
-@st.cache_data
-def generate_trial_data():
+# User ID section in sidebar
+st.sidebar.subheader("👤 User Account")
+if st.session_state.user_id is None:
+    user_input = st.sidebar.text_input(
+        "Enter your name/ID",
+        placeholder="e.g., Dr. Sharon",
+        key="user_input_field"
+    )
+    if user_input:
+        st.session_state.user_id = user_input
+        st.sidebar.success(f"✅ Logged in as: **{user_input}**")
+        st.rerun()
+else:
+    st.sidebar.markdown(f"<div class='user-info'>👤 **{st.session_state.user_id}**</div>", unsafe_allow_html=True)
+    if st.sidebar.button("🔓 Logout", use_container_width=True):
+        st.session_state.user_id = None
+        st.rerun()
+
+st.sidebar.markdown("---")
+
+# Only show navigation if user is logged in
+if st.session_state.user_id:
+    page = st.sidebar.radio("Navigation", [
+        "🔬 Root Analysis",
+        "📊 Dashboard",
+        "📋 Trial Management",
+        "⚙️ Settings"
+    ])
+else:
+    st.info("👤 Please enter your name/ID in the sidebar to get started!")
+    st.stop()
+
+@st.cache_data(hash_funcs={str: lambda x: x})
+def generate_trial_data(user_id):
+    """Generate unique trial data per user based on their user_id"""
+    np.random.seed(hash(user_id) % (2**32))  # Unique seed per user
     dates = pd.date_range(start='2025-01-01', periods=30, freq='D')
     trials = ['Trial A', 'Trial B', 'Trial C', 'Trial D']
     data = []
@@ -68,7 +108,7 @@ def generate_trial_data():
     
     return pd.DataFrame(data)
 
-trial_data = generate_trial_data()
+trial_data = generate_trial_data(st.session_state.user_id)
 
 if page == "🔬 Root Analysis":
     st.markdown("""
@@ -471,10 +511,12 @@ elif page == "⚙️ Settings":
     
     st.markdown("---")
     st.subheader("About RootVision Analytics")
-    st.markdown("**v0.5.0** | AI-Powered Root Phenotyping with Enhanced Batch Analysis | Built with Streamlit & Python")
+    st.markdown("**v0.6.0** | AI-Powered Root Phenotyping with User Isolation | Built with Streamlit & Python")
+    
+    st.info(f"👤 Currently logged in as: **{st.session_state.user_id}**")
     
     if st.button("💾 Save Settings", use_container_width=True):
         st.success("✅ Settings saved!")
 
 st.markdown("---")
-st.markdown("<div style='text-align: center; color: #666; font-size: 0.85rem;'>🌱 RootVision Analytics | AgriVision Analytics | v0.5.0</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #666; font-size: 0.85rem;'>🌱 RootVision Analytics | AgriVision Analytics | v0.6.0</div>", unsafe_allow_html=True)
