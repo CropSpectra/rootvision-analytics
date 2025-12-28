@@ -4,6 +4,8 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
+from PIL import Image
+import io
 
 # Page configuration
 st.set_page_config(
@@ -28,16 +30,23 @@ st.markdown("""
         color: white;
         margin-bottom: 20px;
     }
+    .cv-highlight {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+        margin-bottom: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar navigation
+# Sidebar navigation - ROOT ANALYSIS FIRST
 st.sidebar.title("🌱 RootVision Analytics")
 st.sidebar.markdown("---")
 page = st.sidebar.radio("Navigation", [
+    "🔬 Root Analysis",
     "📊 Dashboard",
     "📈 Growth Tracking",
-    "🔬 Root Analysis",
     "📋 Trial Management",
     "⚙️ Settings"
 ])
@@ -66,12 +75,264 @@ def generate_trial_data():
 
 trial_data = generate_trial_data()
 
-# DASHBOARD PAGE
-if page == "📊 Dashboard":
+# ============================================================================
+# ROOT ANALYSIS PAGE - NOW PRIMARY (FIRST)
+# ============================================================================
+if page == "🔬 Root Analysis":
     st.markdown("""
     <div class="header-section">
-        <h1>🌱 RootVision Analytics Dashboard</h1>
-        <p>AI-Powered Root Phenotyping & Growth Analytics</p>
+        <h1>🔬 Root Image Analysis with Computer Vision</h1>
+        <p>AI-Powered Root Phenotyping & Automated Detection</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="cv-highlight">
+        <h3>🤖 Computer Vision Pipeline</h3>
+        <p>Upload root images for automated analysis using YOLOv8 object detection and semantic segmentation</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Tabs for different analysis modes
+    tabs = st.tabs(["Single Image Analysis", "Batch Processing", "Model Settings", "Analysis History"])
+    
+    with tabs[0]:
+        st.subheader("📸 Single Image Analysis")
+        
+        col1, col2 = st.columns([1.5, 1])
+        
+        with col1:
+            st.write("**Upload root image for analysis**")
+            uploaded_file = st.file_uploader(
+                "Choose a root image (JPG, PNG, TIFF)",
+                type=["jpg", "png", "tiff", "jpeg"],
+                key="single_image"
+            )
+            
+            if uploaded_file is not None:
+                # Display uploaded image
+                image = Image.open(uploaded_file)
+                st.image(image, caption="Uploaded Root Image", use_container_width=True)
+                st.success("✅ Image loaded successfully!")
+        
+        with col2:
+            st.write("**Analysis Parameters**")
+            confidence = st.slider("Confidence Threshold", 0.0, 1.0, 0.65, 0.05)
+            model_type = st.selectbox("Model Type", ["YOLOv8", "YOLOv5", "Mask R-CNN"])
+            iou_threshold = st.slider("IOU Threshold", 0.0, 1.0, 0.45, 0.05)
+            
+            st.write("**Processing Options**")
+            show_bbox = st.checkbox("Show Bounding Boxes", value=True)
+            show_segmentation = st.checkbox("Show Segmentation Mask", value=False)
+            extract_metrics = st.checkbox("Extract Root Metrics", value=True)
+        
+        st.markdown("---")
+        
+        if uploaded_file is not None:
+            if st.button("🚀 Analyze Root Image", use_container_width=True, type="primary"):
+                st.info("⏳ Processing image with computer vision model...")
+                
+                # Simulate CV processing
+                progress = st.progress(0)
+                for i in range(100):
+                    progress.progress(i + 1)
+                
+                st.success("✅ Analysis Complete!")
+                
+                # Display results
+                st.subheader("📊 Analysis Results")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Total Roots Detected", "47", "+3 from previous")
+                
+                with col2:
+                    st.metric("Total Length", "156.8 cm", "+8.2 cm")
+                
+                with col3:
+                    st.metric("Surface Area", "487.3 cm²", "+25.1 cm²")
+                
+                with col4:
+                    st.metric("Root Density", "8.4/cm³", "+0.3/cm³")
+                
+                st.markdown("---")
+                
+                # Detailed metrics table
+                st.subheader("🔍 Detailed Root Metrics")
+                
+                results_data = {
+                    'Root ID': ['R001', 'R002', 'R003', 'R004', 'R005'],
+                    'Length (cm)': [12.5, 11.2, 13.8, 10.9, 12.3],
+                    'Diameter (mm)': [2.1, 1.8, 2.4, 1.9, 2.2],
+                    'Surface Area (cm²)': [85.2, 78.5, 92.3, 72.1, 81.9],
+                    'Angle (degrees)': [45.2, 32.1, 58.4, 41.7, 39.8],
+                    'Confidence': [0.98, 0.96, 0.99, 0.94, 0.97]
+                }
+                
+                results_df = pd.DataFrame(results_data)
+                st.dataframe(results_df, use_container_width=True, hide_index=True)
+                
+                # Visualization of detected roots
+                st.subheader("📈 Root Distribution Analysis")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Root length distribution
+                    fig_length = px.histogram(
+                        results_df,
+                        x='Length (cm)',
+                        nbins=15,
+                        title='Root Length Distribution',
+                        labels={'Length (cm)': 'Length (cm)', 'count': 'Frequency'},
+                        color_discrete_sequence=['#208090']
+                    )
+                    st.plotly_chart(fig_length, use_container_width=True)
+                
+                with col2:
+                    # Root angle distribution
+                    fig_angle = px.scatter(
+                        results_df,
+                        x='Angle (degrees)',
+                        y='Length (cm)',
+                        size='Diameter (mm)',
+                        color='Confidence',
+                        title='Root Angle vs Length',
+                        color_continuous_scale=['#ef4444', '#f59e0b', '#10b981']
+                    )
+                    st.plotly_chart(fig_angle, use_container_width=True)
+                
+                # Download results
+                st.markdown("---")
+                st.subheader("💾 Export Results")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    csv = results_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download CSV",
+                        data=csv,
+                        file_name=f"root_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+                
+                with col2:
+                    st.button("📧 Email Results")
+                
+                with col3:
+                    st.button("☁️ Save to Cloud")
+    
+    with tabs[1]:
+        st.subheader("📂 Batch Image Processing")
+        
+        st.write("Upload multiple root images for batch analysis")
+        
+        batch_files = st.file_uploader(
+            "Choose multiple root images",
+            type=["jpg", "png", "tiff", "jpeg"],
+            accept_multiple_files=True,
+            key="batch_images"
+        )
+        
+        if batch_files:
+            st.write(f"📊 {len(batch_files)} images selected")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                batch_confidence = st.slider("Batch Confidence Threshold", 0.0, 1.0, 0.65)
+            
+            with col2:
+                batch_model = st.selectbox("Batch Model", ["YOLOv8", "YOLOv5", "Mask R-CNN"])
+            
+            if st.button("🚀 Process Batch", use_container_width=True, type="primary"):
+                st.info("⏳ Processing batch images...")
+                
+                progress_bar = st.progress(0)
+                for i in range(len(batch_files)):
+                    progress_bar.progress((i + 1) / len(batch_files))
+                
+                st.success(f"✅ Processed {len(batch_files)} images successfully!")
+                
+                # Show batch results summary
+                batch_summary = {
+                    'Image': [f.name for f in batch_files[:5]],
+                    'Roots Detected': [np.random.randint(30, 60) for _ in range(min(5, len(batch_files)))],
+                    'Total Length (cm)': [np.random.uniform(120, 180) for _ in range(min(5, len(batch_files)))],
+                    'Avg Confidence': [np.random.uniform(0.92, 0.99) for _ in range(min(5, len(batch_files)))]
+                }
+                
+                batch_df = pd.DataFrame(batch_summary)
+                st.dataframe(batch_df, use_container_width=True, hide_index=True)
+    
+    with tabs[2]:
+        st.subheader("⚙️ Model Configuration")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Model Selection**")
+            model_version = st.selectbox("Model Version", ["YOLOv8n", "YOLOv8s", "YOLOv8m", "YOLOv8l", "YOLOv8x"])
+            pretrained = st.checkbox("Use Pretrained Weights", value=True)
+            
+            st.write("**Detection Parameters**")
+            conf_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.5)
+            iou = st.slider("IOU Threshold", 0.0, 1.0, 0.45)
+            max_detections = st.slider("Max Detections", 10, 500, 300)
+        
+        with col2:
+            st.write("**Segmentation Settings**")
+            enable_segmentation = st.checkbox("Enable Semantic Segmentation", value=True)
+            seg_model = st.selectbox("Segmentation Model", ["U-Net", "Mask R-CNN", "DeepLab"])
+            
+            st.write("**Processing**")
+            device = st.radio("Processing Device", ["GPU", "CPU"])
+            batch_size = st.slider("Batch Size", 1, 32, 8)
+        
+        st.markdown("---")
+        
+        if st.button("💾 Save Model Configuration", use_container_width=True):
+            st.success("✅ Configuration saved!")
+    
+    with tabs[3]:
+        st.subheader("📋 Analysis History")
+        
+        history_data = {
+            'Date': pd.date_range('2025-01-20', periods=8),
+            'Image': [f"root_sample_{i}.jpg" for i in range(8)],
+            'Roots Detected': np.random.randint(30, 60, 8),
+            'Total Length (cm)': np.random.uniform(120, 180, 8),
+            'Processing Time (s)': np.random.uniform(2, 8, 8),
+            'Model Used': ['YOLOv8'] * 8
+        }
+        
+        history_df = pd.DataFrame(history_data)
+        history_df['Date'] = history_df['Date'].dt.strftime('%Y-%m-%d %H:%M')
+        
+        st.dataframe(history_df, use_container_width=True, hide_index=True)
+        
+        st.subheader("📊 Analysis Trends")
+        
+        fig = px.line(
+            history_df,
+            x='Date',
+            y='Roots Detected',
+            title='Root Detection Trend Over Time',
+            markers=True
+        )
+        fig.update_layout(height=400, template='plotly_white')
+        st.plotly_chart(fig, use_container_width=True)
+
+# ============================================================================
+# DASHBOARD PAGE
+# ============================================================================
+elif page == "📊 Dashboard":
+    st.markdown("""
+    <div class="header-section">
+        <h1>📊 RootVision Analytics Dashboard</h1>
+        <p>Trial Overview & Growth Analytics</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -134,7 +395,9 @@ if page == "📊 Dashboard":
         fig_health.update_layout(height=400, template='plotly_white', showlegend=False)
         st.plotly_chart(fig_health, use_container_width=True)
 
+# ============================================================================
 # GROWTH TRACKING PAGE
+# ============================================================================
 elif page == "📈 Growth Tracking":
     st.title("📈 Plant Growth Tracking")
     st.markdown("---")
@@ -185,36 +448,9 @@ elif page == "📈 Growth Tracking":
     display_data['Date'] = display_data['Date'].dt.strftime('%Y-%m-%d')
     st.dataframe(display_data, use_container_width=True, hide_index=True)
 
-# ROOT ANALYSIS PAGE
-elif page == "🔬 Root Analysis":
-    st.title("🔬 Root Image Analysis")
-    st.markdown("---")
-    
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.subheader("Upload Root Image")
-        uploaded_file = st.file_uploader("Choose a root image (JPG, PNG)", type=["jpg", "png", "jpeg"])
-        if uploaded_file is not None:
-            st.success("✅ Image uploaded successfully!")
-    
-    with col2:
-        st.subheader("Analysis Settings")
-        threshold = st.slider("Threshold", 0, 255, 127)
-        min_width = st.slider("Min Root Width (px)", 1, 50, 5)
-        sensitivity = st.slider("Sensitivity", 0.0, 1.0, 0.7)
-        
-        if st.button("🔍 Analyze Root Image", use_container_width=True):
-            st.success("✅ Analysis Complete!")
-            col_1, col_2, col_3 = st.columns(3)
-            with col_1:
-                st.metric("Total Length", "47.3 cm", "+2.1 cm")
-            with col_2:
-                st.metric("Surface Area", "156.8 cm²", "+8.2 cm²")
-            with col_3:
-                st.metric("Density", "8.4/cm³", "+0.3/cm³")
-
+# ============================================================================
 # TRIAL MANAGEMENT PAGE
+# ============================================================================
 elif page == "📋 Trial Management":
     st.title("📋 Trial Management")
     st.markdown("---")
@@ -248,7 +484,9 @@ elif page == "📋 Trial Management":
         st.subheader("Trial History")
         st.info("No completed trials yet")
 
+# ============================================================================
 # SETTINGS PAGE
+# ============================================================================
 elif page == "⚙️ Settings":
     st.title("⚙️ Settings")
     st.markdown("---")
@@ -267,10 +505,10 @@ elif page == "⚙️ Settings":
     
     st.markdown("---")
     st.subheader("About RootVision Analytics")
-    st.markdown("**v0.2.0** | AI-Powered Root Phenotyping | Built with Streamlit & Python")
+    st.markdown("**v0.3.0** | AI-Powered Root Phenotyping with Computer Vision | Built with Streamlit & Python")
     
     if st.button("💾 Save Settings", use_container_width=True):
         st.success("✅ Settings saved!")
 
 st.markdown("---")
-st.markdown("<div style='text-align: center; color: #666; font-size: 0.85rem;'>🌱 RootVision Analytics | AgriVision Analytics | v0.2.0</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #666; font-size: 0.85rem;'>🌱 RootVision Analytics | AgriVision Analytics | v0.3.0 - CV Focused</div>", unsafe_allow_html=True)
