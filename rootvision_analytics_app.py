@@ -10,8 +10,8 @@ from skimage.morphology import remove_small_objects, skeletonize
 
 st.set_page_config(page_title="RootVision", page_icon="🌱", layout="wide")
 st.title("🌱 RootVision — Root Image Measurements")
-st.warning("Experimental tool, not validated for research accuracy. Inspect every mask. No trained AI model or biological root count is used.")
-st.caption("Single and batch images use the same real pixel-measurement pipeline. No simulated results.")
+st.warning("Experimental tool, not validated for research accuracy. Inspect every mask.")
+st.caption("Single and batch images use the same real pixel-measurement pipeline.")
 
 
 def measure(mask):
