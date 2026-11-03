@@ -142,7 +142,7 @@ if page == "🔬 Root Analysis":
             
             if uploaded_file is not None:
                 image = Image.open(uploaded_file)
-                st.image(image, caption="Uploaded Root Image", use_container_width=True)
+                st.image(image, caption="Uploaded Root Image", use_column_width=True)
                 st.success("✅ Image loaded successfully!")
         
         with col2:
