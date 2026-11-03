@@ -132,4 +132,4 @@ with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr(name, data)
 st.download_button("Download CSV + masks + overlays (ZIP)", archive.getvalue(), "root_analysis.zip", "application/zip")
 st.subheader("Interpretation limits")
-st.write("Length estimates represent visible skeleton paths, not hidden or overlapping root lengths. Projected area is not root surface area. Spans are image-plane dimensions, not soil depth. This app does not infer root counts, root orders, volume, health or volumetric density.")
+st.write("Length estimates represent visible skeleton paths, image-plane dimensions, not soil depth.")
