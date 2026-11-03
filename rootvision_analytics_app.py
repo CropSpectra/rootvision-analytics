@@ -1,522 +1,135 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
-from datetime import datetime, timedelta
-from PIL import Image
 import io
+import zipfile
+import hashlib
+import numpy as np
+import pandas as pd
+import streamlit as st
+from PIL import Image, ImageOps
+from skimage.filters import threshold_otsu
+from skimage.morphology import remove_small_objects, skeletonize
 
-st.set_page_config(
-    page_title="🌱 RootVision Analytics",
-    page_icon="🌱",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="RootVision", page_icon="🌱", layout="wide")
+st.title("🌱 RootVision — Root Image Measurements")
+st.warning("Experimental tool, not validated for research accuracy. Inspect every mask. No trained AI model or biological root count is used.")
+st.caption("Single and batch images use the same real pixel-measurement pipeline. No simulated results.")
 
-st.markdown("""
-<style>
-    [data-testid="stMetricValue"] {
-        font-size: 2.5rem;
-        color: #208090;
-        font-weight: bold;
-    }
-    .header-section {
-        background: linear-gradient(135deg, #208090 0%, #32b8c6 100%);
-        padding: 30px;
-        border-radius: 10px;
-        color: white;
-        margin-bottom: 20px;
-    }
-    .cv-highlight {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        padding: 20px;
-        border-radius: 10px;
-        color: white;
-        margin-bottom: 20px;
-    }
-    .user-info {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 12px;
-        border-radius: 8px;
-        color: white;
-        font-size: 0.9rem;
-        margin-bottom: 15px;
-    }
-</style>
-""", unsafe_allow_html=True)
 
-# Initialize session state for user
-if 'user_id' not in st.session_state:
-    st.session_state.user_id = None
+def measure(mask):
+    s = skeletonize(mask)
+    h = np.count_nonzero(s[:, :-1] & s[:, 1:])
+    v = np.count_nonzero(s[:-1, :] & s[1:, :])
+    d1 = s[:-1, :-1] & s[1:, 1:] & ~s[:-1, 1:] & ~s[1:, :-1]
+    d2 = s[:-1, 1:] & s[1:, :-1] & ~s[:-1, :-1] & ~s[1:, 1:]
+    length = float(h + v + np.sqrt(2) * (d1.sum() + d2.sum()))
+    ys, xs = np.nonzero(mask)
+    return s, length, int(mask.sum()), int(xs.max()-xs.min()+1), int(ys.max()-ys.min()+1)
 
-st.sidebar.title("🌱 RootVision Analytics")
-st.sidebar.markdown("---")
-
-# User ID section in sidebar
-st.sidebar.subheader("👤 User Account")
-if st.session_state.user_id is None:
-    user_input = st.sidebar.text_input(
-        "Enter your name/ID",
-        placeholder="e.g., Dr. Sharon",
-        key="user_input_field"
-    )
-    if user_input:
-        st.session_state.user_id = user_input
-        st.sidebar.success(f"✅ Logged in as: **{user_input}**")
-        st.rerun()
-else:
-    st.sidebar.markdown(f"<div class='user-info'>👤 **{st.session_state.user_id}**</div>", unsafe_allow_html=True)
-    if st.sidebar.button("🔓 Logout", use_container_width=True):
-        st.session_state.user_id = None
-        st.rerun()
-
-st.sidebar.markdown("---")
-
-# Only show navigation if user is logged in
-if st.session_state.user_id:
-    page = st.sidebar.radio("Navigation", [
-        "🔬 Root Analysis",
-        "📊 Dashboard",
-        "📋 Trial Management",
-        "⚙️ Settings"
-    ])
-else:
-    st.info("👤 Please enter your name/ID in the sidebar to get started!")
+mode = st.radio("Workflow", ["Single image", "Batch images"], horizontal=True)
+files = st.file_uploader("Upload root images", type=["jpg", "jpeg", "png", "tif", "tiff"], accept_multiple_files=True)
+if not files:
+    st.info("Upload images to begin. TIFF files: only the first frame is analyzed.")
     st.stop()
+if mode == "Single image" and len(files) > 1:
+    st.error("Choose Batch images to process multiple files, or upload one file.")
+    st.stop()
+st.info("Configure each image below. Crop out rulers, labels, shoots and seeds. Scale is entered separately for each image; no calibration is assumed.")
+rows = []
+artifacts = {}
+for index, uploaded in enumerate(files):
+    raw = uploaded.getvalue()
+    key = f"{index}_{hashlib.sha256(raw).hexdigest()[:12]}"
+    with st.expander(f"{index+1}. {uploaded.name}", expanded=len(files)==1):
+        try:
+            image = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
+            rgb = np.asarray(image)
+            height, width = rgb.shape[:2]
+            st.caption(f"Original oriented image: {width} × {height} pixels. Analysis uses full resolution; preview may be resized.")
+            st.image(image, caption="Original", use_column_width=True)
+            c1, c2 = st.columns(2)
+            xr = c1.slider("Horizontal crop (%)", 0, 100, (0, 100), key=key+"x")
+            yr = c2.slider("Vertical crop (%)", 0, 100, (0, 100), key=key+"y")
+            x0, x1 = [int(width*x/100) for x in xr]
+            y0, y1 = [int(height*y/100) for y in yr]
+            if x1 <= x0 or y1 <= y0:
+                raise ValueError("Crop must have positive width and height.")
+            crop = rgb[y0:y1, x0:x1]
+            calibrated = st.checkbox("Apply physical scale", key=key+"cal")
+            scale = None
+            if calibrated:
+                st.caption("Measure a known ruler interval in ORIGINAL oriented-image pixels using an image editor. Enter the Euclidean pixel distance and its physical distance. Ruler and roots must be in the same plane; perspective distortion is not corrected.")
+                a, b = st.columns(2)
+                px = a.number_input("Ruler interval (pixels)", min_value=0.01, value=100.0, key=key+"px")
+                cm = b.number_input("Same interval (cm)", min_value=0.001, value=1.0, format="%.3f", key=key+"cm")
+                scale = px/cm
+                st.write(f"Scale: {scale:.3f} pixels/cm")
+            polarity = st.selectbox("Root appearance", ["Light roots on dark background", "Dark roots on light background"], key=key+"pol")
+            gray = np.dot(crop[..., :3], [0.2126, 0.7152, 0.0722])
+            automatic = st.checkbox("Automatic brightness threshold", value=True, key=key+"auto")
+            if automatic:
+                threshold = float(threshold_otsu(gray))
+                st.caption(f"Automatic threshold: {threshold:.1f}/255")
+            else:
+                threshold = st.slider("Brightness threshold", 0, 255, 150, key=key+"thr")
+            minimum = st.number_input("Remove isolated objects smaller than (pixels)", min_value=1, value=30, key=key+"min")
+            mask = gray > threshold if polarity.startswith("Light") else gray < threshold
+            mask = remove_small_objects(mask, min_size=int(minimum))
+            if not mask.any():
+                raise ValueError("No selected root pixels. Change crop, polarity or threshold.")
+            skeleton, length, area, span_x, span_y = measure(mask)
+            overlay = crop.copy()
+            overlay[mask] = (overlay[mask]*0.5 + np.array([0,255,0])*0.5).astype(np.uint8)
+            overlay[skeleton] = [255,0,0]
+            a, b = st.columns(2)
+            a.image(mask.astype(np.uint8)*255, caption="White = measured pixels", use_column_width=True)
+            b.image(overlay, caption="Green = mask; red = skeleton", use_column_width=True)
+            border = bool(mask[0].any() or mask[-1].any() or mask[:,0].any() or mask[:,-1].any())
+            if border:
+                st.warning("Selected pixels touch the crop border: roots may be cut off or background may be selected.")
+            reviewed = st.checkbox("I reviewed this mask: roots are adequately included and non-root objects excluded", key=key+"review")
+            st.caption("Review is your visual judgment, not an automated accuracy certification. Recheck after any setting change.")
+            divisor = scale if scale else 1.0
+            unit = "cm" if scale else "px"
+            c1,c2 = st.columns(2)
+            c1.metric("Estimated visible root length", f"{length/divisor:.2f} {unit}")
+            c2.metric("Projected selected area", f"{area/divisor**2:.2f} {unit}²")
+            c1,c2 = st.columns(2)
+            c1.metric("Horizontal span", f"{span_x/divisor:.2f} {unit}")
+            c2.metric("Vertical span", f"{span_y/divisor:.2f} {unit}")
+            rows.append(dict(image_index=index+1, image=uploaded.name, status="reviewed" if reviewed else "needs_visual_review", crop_border_contact=border, estimated_visible_length=length/divisor, projected_area=area/divisor**2, horizontal_span=span_x/divisor, vertical_span=span_y/divisor, length_unit=unit, area_unit=unit+"^2", pixels_per_cm=scale, threshold=threshold, polarity=polarity, minimum_object_pixels=minimum, crop_x0=x0, crop_x1=x1, crop_y0=y0, crop_y1=y1, original_width=width, original_height=height, image_sha256=hashlib.sha256(raw).hexdigest()))
+            for name, arr in [("mask", mask.astype(np.uint8)*255), ("overlay", overlay)]:
+                buffer = io.BytesIO()
+                Image.fromarray(arr).save(buffer, format="PNG")
+                artifacts[f"image_{index+1:03d}_{name}.png"] = buffer.getvalue()
+        except Exception as exc:
+            st.error(f"Image could not be measured: {exc}")
+            rows.append(dict(image_index=index+1, image=uploaded.name, status="failed", error=str(exc)))
 
-@st.cache_data(hash_funcs={str: lambda x: x})
-def generate_trial_data(user_id):
-    """Generate unique trial data per user based on their user_id"""
-    np.random.seed(hash(user_id) % (2**32))  # Unique seed per user
-    dates = pd.date_range(start='2025-01-01', periods=30, freq='D')
-    trials = ['Trial A', 'Trial B', 'Trial C', 'Trial D']
-    data = []
-    
-    for trial in trials:
-        base_depth = np.random.uniform(2, 4)
-        for i, date in enumerate(dates):
-            depth = base_depth + (i * np.random.uniform(0.25, 0.35))
-            data.append({
-                'Date': date,
-                'Trial': trial,
-                'Root Depth (cm)': depth + np.random.normal(0, 0.3),
-                'Root Surface Area (cm²)': depth * 18 + np.random.normal(0, 5),
-                'Root Density (per cm³)': depth * 2.5 + np.random.normal(0, 0.2),
-                'Health Score': min(10, 5 + (depth / 2) + np.random.normal(0, 0.5))
-            })
-    
-    return pd.DataFrame(data)
-
-trial_data = generate_trial_data(st.session_state.user_id)
-
-if page == "🔬 Root Analysis":
-    st.markdown("""
-    <div class="header-section">
-        <h1>🔬 Root Image Analysis with Computer Vision</h1>
-        <p>AI-Powered Root Phenotyping & Automated Detection</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="cv-highlight">
-        <h3>🤖 Computer Vision Pipeline</h3>
-        <p>Upload root images for automated analysis using YOLOv8 object detection and semantic segmentation</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    tabs = st.tabs(["Single Image Analysis", "Batch Processing", "Model Settings", "Analysis History"])
-    
-    with tabs[0]:
-        st.subheader("📸 Single Image Analysis")
-        
-        col1, col2 = st.columns([1.5, 1])
-        
-        with col1:
-            st.write("**Upload root image for analysis**")
-            uploaded_file = st.file_uploader(
-                "Choose a root image (JPG, PNG, TIFF)",
-                type=["jpg", "png", "tiff", "jpeg"],
-                key="single_image"
-            )
-            
-            if uploaded_file is not None:
-                image = Image.open(uploaded_file)
-                st.image(image, caption="Uploaded Root Image", use_column_width=True)
-                st.success("✅ Image loaded successfully!")
-        
-        with col2:
-            st.write("**Analysis Parameters**")
-            confidence = st.slider("Confidence Threshold", 0.0, 1.0, 0.65, 0.05)
-            model_type = st.selectbox("Model Type", ["YOLOv8", "YOLOv5", "Mask R-CNN"])
-            iou_threshold = st.slider("IOU Threshold", 0.0, 1.0, 0.45, 0.05)
-            
-            st.write("**Processing Options**")
-            show_bbox = st.checkbox("Show Bounding Boxes", value=True)
-            show_segmentation = st.checkbox("Show Segmentation Mask", value=False)
-            extract_metrics = st.checkbox("Extract Root Metrics", value=True)
-        
-        st.markdown("---")
-        
-        if uploaded_file is not None:
-            if st.button("🚀 Analyze Root Image", use_container_width=True, type="primary"):
-                st.info("⏳ Processing image with computer vision model...")
-                
-                progress = st.progress(0)
-                for i in range(100):
-                    progress.progress(i + 1)
-                
-                st.success("✅ Analysis Complete!")
-                
-                st.subheader("📊 Analysis Results")
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Total Roots Detected", "47", "+3")
-                with col2:
-                    st.metric("Total Length", "1,847.3 cm", "+82.2 cm")
-                with col3:
-                    st.metric("Surface Area", "4,287.3 cm²", "+251.1 cm²")
-                with col4:
-                    st.metric("Root Density", "28.4/cm³", "+1.8/cm³")
-                
-                st.markdown("---")
-                
-                st.subheader("🌿 Root System Summary")
-                
-                col1, col2, col3, col4, col5, col6 = st.columns(6)
-                with col1:
-                    st.metric("Primary Roots", "8", "Main axes")
-                with col2:
-                    st.metric("Secondary Roots", "24", "Lateral branches")
-                with col3:
-                    st.metric("Tertiary Roots", "156", "Fine roots")
-                with col4:
-                    st.metric("Root Depth", "42.3 cm", "Penetration")
-                with col5:
-                    st.metric("Avg Diameter", "2.1 mm", "All roots")
-                with col6:
-                    st.metric("Branching Index", "6.2", "Complexity")
-                
-                st.markdown("---")
-                
-                st.subheader("🔍 Primary Root Details")
-                
-                results_data = {
-                    'Root ID': ['P001', 'P002', 'P003', 'P004', 'P005', 'P006', 'P007', 'P008'],
-                    'Type': ['Primary']*8,
-                    'Length (cm)': [42.3, 38.9, 41.2, 35.7, 39.8, 37.5, 40.1, 36.2],
-                    'Diameter (mm)': [3.2, 2.9, 3.1, 2.8, 3.0, 2.7, 3.2, 2.9],
-                    'Surface Area (cm²)': [428.5, 356.2, 398.7, 314.5, 376.8, 320.1, 412.3, 332.7],
-                    'Volume (cm³)': [85.7, 62.3, 76.2, 52.1, 68.9, 48.3, 82.4, 56.8],
-                    'Angle (degrees)': [45.2, 32.1, 58.4, 41.7, 39.8, 48.2, 35.9, 43.1],
-                    'Secondary Branches': [3, 3, 3, 2, 3, 2, 3, 3],
-                    'Confidence': [0.98, 0.96, 0.99, 0.94, 0.97, 0.95, 0.99, 0.96]
-                }
-                
-                results_df = pd.DataFrame(results_data)
-                st.dataframe(results_df, use_container_width=True, hide_index=True)
-                
-                st.markdown("---")
-                
-                st.subheader("🌾 Secondary Root Details")
-                
-                secondary_data = {
-                    'Root ID': ['S001', 'S002', 'S003', 'S004', 'S005', 'S006'],
-                    'Parent Root': ['P001', 'P001', 'P002', 'P002', 'P003', 'P003'],
-                    'Length (cm)': [18.5, 16.2, 17.8, 15.3, 19.2, 17.1],
-                    'Diameter (mm)': [1.8, 1.6, 1.9, 1.5, 2.0, 1.7],
-                    'Insertion Angle (°)': [65.3, 72.1, 58.9, 68.4, 71.2, 64.8],
-                    'Distance from Base (cm)': [8.2, 12.5, 7.8, 15.3, 9.1, 13.7],
-                    'Surface Area (cm²)': [104.8, 81.3, 106.5, 72.1, 121.3, 91.8]
-                }
-                
-                secondary_df = pd.DataFrame(secondary_data)
-                st.dataframe(secondary_df, use_container_width=True, hide_index=True)
-                
-                st.markdown("---")
-                
-                st.subheader("📈 Root Distribution Analysis")
-                
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    fig_length = px.histogram(results_df, x='Length (cm)', nbins=8, 
-                        title='Primary Root Length Distribution', color_discrete_sequence=['#208090'])
-                    st.plotly_chart(fig_length, use_container_width=True)
-                
-                with col2:
-                    fig_diameter = px.histogram(results_df, x='Diameter (mm)', nbins=8,
-                        title='Primary Root Diameter Distribution', color_discrete_sequence=['#059669'])
-                    st.plotly_chart(fig_diameter, use_container_width=True)
-                
-                with col3:
-                    fig_angle = px.histogram(results_df, x='Angle (degrees)', nbins=8,
-                        title='Root Emergence Angle Distribution', color_discrete_sequence=['#f59e0b'])
-                    st.plotly_chart(fig_angle, use_container_width=True)
-                
-                st.markdown("---")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    fig_ld = px.scatter(results_df, x='Length (cm)', y='Diameter (mm)',
-                        size='Surface Area (cm²)', color='Secondary Branches',
-                        title='Root Length vs Diameter', color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'])
-                    st.plotly_chart(fig_ld, use_container_width=True)
-                
-                with col2:
-                    fig_ab = px.scatter(results_df, x='Angle (degrees)', y='Secondary Branches',
-                        size='Length (cm)', color='Confidence', title='Emergence Angle vs Branching',
-                        color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'])
-                    st.plotly_chart(fig_ab, use_container_width=True)
-                
-                st.markdown("---")
-                
-                st.subheader("🏗️ Root Architecture Summary")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("""**Total Root System Metrics:**
-                    - Total Root Length: 1,847.3 cm
-                    - Total Surface Area: 4,287.3 cm²
-                    - Total Root Volume: 612.8 cm³
-                    - Maximum Depth: 42.3 cm
-                    - Average Diameter: 2.1 mm
-                    - Root Density Index: 28.4 roots/cm³""")
-                
-                with col2:
-                    st.markdown("""**Branching Architecture:**
-                    - Primary Roots: 8 main axes
-                    - Secondary Roots: 24 lateral branches
-                    - Tertiary Roots: 156 fine roots
-                    - Branching Complexity Index: 6.2
-                    - Avg Branching Angle: 52.8°
-                    - Root System Spread: 38.7 cm""")
-                
-                st.markdown("---")
-                st.subheader("💾 Export Results")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    csv = results_df.to_csv(index=False)
-                    st.download_button("📥 Primary Roots CSV", csv,
-                        f"primary_roots_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", "text/csv")
-                with col2:
-                    csv_sec = secondary_df.to_csv(index=False)
-                    st.download_button("📥 Secondary Roots CSV", csv_sec,
-                        f"secondary_roots_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", "text/csv")
-                with col3:
-                    st.button("📧 Email Report")
-    
-    with tabs[1]:
-        st.subheader("📂 Batch Image Processing")
-        st.write("Upload multiple root images for comprehensive batch analysis with all measurements")
-        
-        batch_files = st.file_uploader("Choose multiple root images", 
-            type=["jpg", "png", "tiff", "jpeg"], accept_multiple_files=True, key="batch_images")
-        
-        if batch_files:
-            st.write(f"📊 {len(batch_files)} images selected")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                batch_confidence = st.slider("Batch Confidence Threshold", 0.0, 1.0, 0.65)
-            with col2:
-                batch_model = st.selectbox("Batch Model", ["YOLOv8", "YOLOv5", "Mask R-CNN"])
-            
-            if st.button("🚀 Process Batch", use_container_width=True, type="primary"):
-                st.info("⏳ Processing batch images...")
-                
-                progress_bar = st.progress(0)
-                for i in range(len(batch_files)):
-                    progress_bar.progress((i + 1) / len(batch_files))
-                
-                st.success(f"✅ Processed {len(batch_files)} images!")
-                
-                batch_summary = {
-                    'Image': [f.name for f in batch_files],
-                    'Total Roots': [np.random.randint(40, 55) for _ in range(len(batch_files))],
-                    'Primary Roots': [8 for _ in range(len(batch_files))],
-                    'Secondary Roots': [np.random.randint(20, 28) for _ in range(len(batch_files))],
-                    'Tertiary Roots': [np.random.randint(150, 170) for _ in range(len(batch_files))],
-                    'Total Length (cm)': [np.random.uniform(1200, 2000) for _ in range(len(batch_files))],
-                    'Total Surface Area (cm²)': [np.random.uniform(3800, 4500) for _ in range(len(batch_files))],
-                    'Total Volume (cm³)': [np.random.uniform(550, 650) for _ in range(len(batch_files))],
-                    'Avg Diameter (mm)': [np.random.uniform(1.9, 2.3) for _ in range(len(batch_files))],
-                    'Max Depth (cm)': [np.random.uniform(38, 45) for _ in range(len(batch_files))],
-                    'Branching Index': [np.random.uniform(5.8, 6.5) for _ in range(len(batch_files))],
-                    'Avg Branching Angle (°)': [np.random.uniform(50, 55) for _ in range(len(batch_files))],
-                    'Root System Spread (cm)': [np.random.uniform(35, 42) for _ in range(len(batch_files))],
-                    'Avg Confidence': [np.random.uniform(0.93, 0.99) for _ in range(len(batch_files))]
-                }
-                
-                batch_df = pd.DataFrame(batch_summary)
-                st.dataframe(batch_df, use_container_width=True, hide_index=True)
-                
-                st.markdown("---")
-                st.subheader("💾 Export Complete Batch Results")
-                
-                csv = batch_df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Complete Batch Analysis (All Measurements)",
-                    data=csv,
-                    file_name=f"batch_analysis_complete_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
-    
-    with tabs[2]:
-        st.subheader("⚙️ Model Configuration")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**Model Selection**")
-            model_version = st.selectbox("Model Version", ["YOLOv8n", "YOLOv8s", "YOLOv8m", "YOLOv8l", "YOLOv8x"])
-            pretrained = st.checkbox("Use Pretrained Weights", value=True)
-            
-            st.write("**Detection Parameters**")
-            conf_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.5)
-            iou = st.slider("IOU Threshold", 0.0, 1.0, 0.45)
-            max_detections = st.slider("Max Detections", 10, 500, 300)
-        
-        with col2:
-            st.write("**Segmentation Settings**")
-            enable_segmentation = st.checkbox("Enable Semantic Segmentation", value=True)
-            seg_model = st.selectbox("Segmentation Model", ["U-Net", "Mask R-CNN", "DeepLab"])
-            
-            st.write("**Processing**")
-            device = st.radio("Processing Device", ["GPU", "CPU"])
-            batch_size = st.slider("Batch Size", 1, 32, 8)
-        
-        st.markdown("---")
-        if st.button("💾 Save Model Configuration", use_container_width=True):
-            st.success("✅ Configuration saved!")
-    
-    with tabs[3]:
-        st.subheader("📋 Analysis History")
-        
-        history_data = {
-            'Date': pd.date_range('2025-01-20', periods=8),
-            'Image': [f"root_sample_{i}.jpg" for i in range(8)],
-            'Total Roots': np.random.randint(30, 60, 8),
-            'Total Length (cm)': np.random.uniform(1200, 2000, 8),
-            'Max Depth (cm)': np.random.uniform(35, 45, 8),
-            'Processing Time (s)': np.random.uniform(2, 8, 8),
-            'Model Used': ['YOLOv8'] * 8
-        }
-        
-        history_df = pd.DataFrame(history_data)
-        history_df['Date'] = history_df['Date'].dt.strftime('%Y-%m-%d %H:%M')
-        
-        st.dataframe(history_df, use_container_width=True, hide_index=True)
-        
-        st.subheader("📊 Analysis Trends")
-        fig = px.line(history_df, x='Date', y='Total Roots', title='Root Detection Trend', markers=True)
-        fig.update_layout(height=400, template='plotly_white')
-        st.plotly_chart(fig, use_container_width=True)
-
-elif page == "📊 Dashboard":
-    st.markdown("""
-    <div class="header-section">
-        <h1>📊 RootVision Analytics Dashboard</h1>
-        <p>Trial Overview & Growth Analytics</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric(label="Active Trials", value="4", delta="On track")
-    with col2:
-        avg_depth = trial_data['Root Depth (cm)'].mean()
-        st.metric(label="Avg Root Depth", value=f"{avg_depth:.1f} cm", delta="+0.8 cm")
-    with col3:
-        avg_health = trial_data['Health Score'].mean()
-        st.metric(label="Overall Health", value=f"{avg_health:.1f}/10", delta="+0.5")
-    with col4:
-        total_plants = len(trial_data['Trial'].unique()) * 12
-        st.metric(label="Plants Analyzed", value=total_plants, delta="+48 this week")
-    
-    st.markdown("---")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        fig_depth = go.Figure()
-        for trial in trial_data['Trial'].unique():
-            trial_subset = trial_data[trial_data['Trial'] == trial]
-            fig_depth.add_trace(go.Scatter(
-                x=trial_subset['Date'], y=trial_subset['Root Depth (cm)'],
-                mode='lines+markers', name=trial, line=dict(width=3), marker=dict(size=5)))
-        
-        fig_depth.update_layout(title="Root Depth Growth Over Time", xaxis_title="Date",
-            yaxis_title="Depth (cm)", hovermode='x unified', template='plotly_white', height=400)
-        st.plotly_chart(fig_depth, use_container_width=True)
-    
-    with col2:
-        health_by_trial = trial_data.groupby('Trial')['Health Score'].mean().sort_values(ascending=False)
-        fig_health = px.bar(x=health_by_trial.index, y=health_by_trial.values,
-            labels={'x': 'Trial', 'y': 'Health Score (0-10)'}, title='Plant Health Score by Trial',
-            color=health_by_trial.values, color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'])
-        fig_health.update_layout(height=400, template='plotly_white', showlegend=False)
-        st.plotly_chart(fig_health, use_container_width=True)
-
-elif page == "📋 Trial Management":
-    st.title("📋 Trial Management")
-    st.markdown("---")
-    
-    tabs = st.tabs(["Active Trials", "Create New Trial", "Trial History"])
-    
-    with tabs[0]:
-        st.subheader("Active Trials")
-        trial_list = [
-            {"name": "Trial A", "status": "Active", "start": "2025-01-01", "plants": 12},
-            {"name": "Trial B", "status": "Active", "start": "2025-01-05", "plants": 12},
-            {"name": "Trial C", "status": "Pending", "start": "2025-01-15", "plants": 12},
-            {"name": "Trial D", "status": "Active", "start": "2025-01-20", "plants": 12},
-        ]
-        for trial in trial_list:
-            st.write(f"**{trial['name']}** | {trial['status']} | {trial['start']} | {trial['plants']} plants")
-            st.divider()
-    
-    with tabs[1]:
-        st.subheader("Create New Trial")
-        trial_name = st.text_input("Trial Name")
-        num_plants = st.number_input("Number of Plants", min_value=1, max_value=100, value=12)
-        trial_type = st.selectbox("Trial Type", ["Growth Comparison", "Disease Resistance", "Breeding Selection"])
-        start_date = st.date_input("Start Date")
-        
-        if st.button("Create Trial", use_container_width=True):
-            st.success(f"✅ Trial '{trial_name}' created successfully!")
-    
-    with tabs[2]:
-        st.subheader("Trial History")
-        st.info("No completed trials yet")
-
-elif page == "⚙️ Settings":
-    st.title("⚙️ Settings")
-    st.markdown("---")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Display Settings")
-        theme = st.radio("Theme", ["Light", "Dark", "Auto"])
-        language = st.selectbox("Language", ["English", "Spanish", "French"])
-    
-    with col2:
-        st.subheader("Analysis Settings")
-        units = st.radio("Measurement Units", ["Metric (cm)", "Imperial (in)"])
-        auto_save = st.checkbox("Auto-save Results", value=True)
-    
-    st.markdown("---")
-    st.subheader("About RootVision Analytics")
-    st.markdown("**v0.6.0** | AI-Powered Root Phenotyping with User Isolation | Built with Streamlit & Python")
-    
-    st.info(f"👤 Currently logged in as: **{st.session_state.user_id}**")
-    
-    if st.button("💾 Save Settings", use_container_width=True):
-        st.success("✅ Settings saved!")
-
-st.markdown("---")
-st.markdown("<div style='text-align: center; color: #666; font-size: 0.85rem;'>🌱 RootVision Analytics | AgriVision Analytics | v0.6.0</div>", unsafe_allow_html=True)
+st.subheader("Results and exports")
+st.caption("Pixel and centimeter rows must not be pooled. Failed images remain in the CSV. Review flags are exported; unreviewed rows are provisional.")
+df = pd.DataFrame(rows)
+st.dataframe(df, use_container_width=True, hide_index=True)
+csv = df.to_csv(index=False).encode("utf-8")
+st.download_button("Download measurements CSV", csv, "root_measurements.csv", "text/csv")
+notes = """RootVision experimental image analysis
+No trained AI model. No simulated measurements.
+Length: sum of orthogonal (1 px) and unbridged diagonal (sqrt(2) px) links on a binary skeleton.
+Area: selected foreground pixel count, converted using scale squared if calibrated.
+Spans: selected-mask bounding-box dimensions, not soil rooting depth.
+Projected area is NOT cylindrical surface area. No volume, root density, biological root count, root order or health score is inferred.
+Overlaps hide roots; segmentation errors and skeleton discretization affect length. Small-object filtering may discard fine or detached roots.
+Root hairs, shadows, seeds, debris and background texture can be selected as roots.
+Uniform scale assumes roots and ruler in the same plane, negligible perspective distortion and no image resizing after calibration.
+User review is not validation. Compare with manually traced references and known dimensions before scientific use.
+Per-image SHA256 identifies input files. Crop coordinates refer to the EXIF-oriented original image.
+Masks and overlays correspond to the crop, not the full image. TIFF: only first frame analyzed.
+Results are computed in memory, not stored as analysis history. Download before leaving.
+"""
+archive = io.BytesIO()
+with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+    z.writestr("measurements.csv", csv)
+    z.writestr("METHOD_AND_LIMITATIONS.txt", notes)
+    for name, data in artifacts.items():
+        z.writestr(name, data)
+st.download_button("Download CSV + masks + overlays (ZIP)", archive.getvalue(), "root_analysis.zip", "application/zip")
+st.subheader("Interpretation limits")
+st.write("Length estimates represent visible skeleton paths, not hidden or overlapping root lengths. Projected area is not root surface area. Spans are image-plane dimensions, not soil depth. This app does not infer root counts, root orders, volume, health or volumetric density.")
